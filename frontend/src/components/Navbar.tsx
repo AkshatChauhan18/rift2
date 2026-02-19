@@ -49,7 +49,7 @@ const Navbar = () => {
             <Dna className="w-6 h-6 text-white" />
           </motion.div>
           <span className="font-display text-2xl font-bold text-foreground">
-            Pharma<span className="text-primary">Guard</span>
+            Intelli<span className="text-primary">Gene</span>
           </span>
         </Link>
 

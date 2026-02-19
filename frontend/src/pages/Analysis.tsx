@@ -69,7 +69,7 @@ const Analysis = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8"
+            className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 overflow-visible"
           >
             <motion.div
               whileHover={{ y: -4 }}
@@ -82,7 +82,7 @@ const Analysis = () => {
             <motion.div
               whileHover={{ y: -4 }}
               transition={{ duration: 0.2 }}
-              className="glass-card rounded-2xl p-6 flex flex-col"
+              className="glass-card rounded-2xl p-6 flex flex-col overflow-visible"
             >
               <DrugInput drugs={drugs} onDrugsChange={setDrugs} />
               

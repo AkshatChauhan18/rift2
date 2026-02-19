@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { SUPPORTED_DRUGS } from "@/utils/validation";
 import { X, AlertCircle, ChevronDown, Pill } from "lucide-react";
@@ -11,6 +12,47 @@ interface DrugInputProps {
 const DrugInput = ({ drugs, onDrugsChange }: DrugInputProps) => {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (!open || !buttonRef.current) return;
+
+    const updatePosition = () => {
+      if (!buttonRef.current) return;
+      const rect = buttonRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY + 8,
+        left: rect.left + window.scrollX,
+        width: rect.width,
+      });
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (buttonRef.current && !buttonRef.current.contains(e.target as Node)) {
+        const dropdown = document.querySelector('[data-dropdown-menu]');
+        if (dropdown && !dropdown.contains(e.target as Node)) {
+          setOpen(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
 
   const toggleDrug = (drug: string) => {
     setError(null);
@@ -26,7 +68,7 @@ const DrugInput = ({ drugs, onDrugsChange }: DrugInputProps) => {
   };
 
   return (
-    <div className="flex-1">
+    <div className="flex-1 relative z-30">
       <label className="text-sm font-semibold text-foreground mb-3 block flex items-center gap-2">
         <Pill className="w-4 h-4 text-secondary" />
         Select Drug(s) for Analysis
@@ -72,8 +114,9 @@ const DrugInput = ({ drugs, onDrugsChange }: DrugInputProps) => {
       </AnimatePresence>
 
       {/* Dropdown */}
-      <div className="relative">
+      <div className="relative z-40">
         <motion.button
+          ref={buttonRef}
           whileHover={{ scale: 1.01 }}
           whileTap={{ scale: 0.99 }}
           type="button"
@@ -93,29 +136,31 @@ const DrugInput = ({ drugs, onDrugsChange }: DrugInputProps) => {
           </motion.div>
         </motion.button>
 
-        <AnimatePresence>
-          {open && (
+        {open && createPortal(
+          <AnimatePresence>
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: -8 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: -8 }}
+              data-dropdown-menu
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
               transition={{ 
                 duration: 0.2,
                 ease: [0.4, 0, 0.2, 1]
               }}
-              className="absolute z-20 mt-2 w-full rounded-xl border border-border glass-card-strong shadow-2xl overflow-hidden origin-top"
+              style={{
+                position: 'absolute',
+                top: dropdownPosition.top,
+                left: dropdownPosition.left,
+                width: dropdownPosition.width,
+                zIndex: 9999,
+              }}
+              className="rounded-xl border border-border glass-card-strong shadow-2xl origin-top overflow-hidden"
             >
               {/* Drug List */}
-              <div className="max-h-64 overflow-y-auto">
+              <div className="h-[260px] overflow-y-scroll overflow-x-hidden touch-auto" style={{ scrollbarWidth: 'thin', WebkitOverflowScrolling: 'touch' }}>
                 {SUPPORTED_DRUGS.map((drug, idx) => (
-                  <motion.button
+                  <button
                     key={drug}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ 
-                      delay: idx * 0.03,
-                      duration: 0.2
-                    }}
                     type="button"
                     onClick={() => {
                       toggleDrug(drug);
@@ -130,24 +175,16 @@ const DrugInput = ({ drugs, onDrugsChange }: DrugInputProps) => {
                     <div className="flex items-center justify-between">
                       <span>{drug}</span>
                       {drugs.includes(drug) && (
-                        <motion.div
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          transition={{ 
-                            type: "spring",
-                            stiffness: 500,
-                            damping: 30
-                          }}
-                          className="w-2 h-2 rounded-full bg-primary"
-                        />
+                        <div className="w-2 h-2 rounded-full bg-primary" />
                       )}
                     </div>
-                  </motion.button>
+                  </button>
                 ))}
               </div>
             </motion.div>
-          )}
-        </AnimatePresence>
+          </AnimatePresence>,
+          document.body
+        )}
       </div>
 
       <AnimatePresence>

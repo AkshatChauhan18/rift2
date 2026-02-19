@@ -1,6 +1,14 @@
 import { Dna, Github, Mail, Heart } from "lucide-react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 const Footer = () => (
   <footer className="border-t border-border glass-card-strong">
@@ -22,7 +30,7 @@ const Footer = () => (
               <Dna className="w-5 h-5 text-white" />
             </motion.div>
             <span className="font-display text-xl font-bold text-foreground">
-              Pharma<span className="text-primary">Guard</span>
+              Intelli<span className="text-primary">Gene</span>
             </span>
           </Link>
           <p className="text-sm text-muted-foreground leading-relaxed">
@@ -77,18 +85,7 @@ const Footer = () => (
             >
               CPIC Guidelines
             </a>
-            <a
-              href="#"
-              className="text-sm text-muted-foreground hover:text-primary transition-colors"
-            >
-              Documentation
-            </a>
-            <a
-              href="#"
-              className="text-sm text-muted-foreground hover:text-primary transition-colors"
-            >
-              API Reference
-            </a>
+            
           </div>
         </motion.div>
 
@@ -102,7 +99,7 @@ const Footer = () => (
           <h4 className="font-display font-semibold text-foreground mb-4">Connect</h4>
           <div className="flex flex-col gap-3">
             <a
-              href="https://github.com"
+              href="https://github.com/AkshatChauhan18/rift2"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
@@ -110,13 +107,31 @@ const Footer = () => (
               <Github className="w-4 h-4" />
               GitHub
             </a>
-            <a
-              href="mailto:contact@pharmaguard.ai"
-              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
-            >
-              <Mail className="w-4 h-4" />
-              Contact Us
-            </a>
+            <Dialog>
+              <DialogTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors text-left"
+                >
+                  <Mail className="w-4 h-4" />
+                  Contact Us
+                </button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Contact Us</DialogTitle>
+                  <DialogDescription>
+                    Contact us at email
+                    <a
+                      href="mailto:riftrizzers@gmail.com"
+                      className="ml-1 text-primary hover:underline"
+                    >
+                      riftrizzers@gmail.com
+                    </a>
+                  </DialogDescription>
+                </DialogHeader>
+              </DialogContent>
+            </Dialog>
           </div>
         </motion.div>
       </div>
@@ -130,10 +145,10 @@ const Footer = () => (
         className="pt-8 border-t border-border flex flex-col md:flex-row justify-between items-center gap-4"
       >
         <p className="text-sm text-muted-foreground text-center md:text-left">
-          © {new Date().getFullYear()} PharmaGuard. Built for HealthTech Hackathon.
+          © {new Date().getFullYear()} IntelliGene. Built for RIFT 2026.
         </p>
         <p className="text-sm text-muted-foreground flex items-center gap-1">
-          Made with <Heart className="w-4 h-4 text-destructive fill-destructive" /> for better healthcare
+          Made with <Heart className="w-4 h-4 text-destructive fill-destructive" /> by RiftRizzers for better healthcare
         </p>
       </motion.div>
     </div>

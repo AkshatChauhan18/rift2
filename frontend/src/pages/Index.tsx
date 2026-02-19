@@ -33,8 +33,8 @@ const features = [
 
 const stats = [
   { value: "99.9%", label: "Accuracy" },
-  { value: "<2s", label: "Analysis Time" },
-  { value: "50+", label: "Drugs Supported" },
+  { value: "<5s", label: "Analysis Time" },
+  { value: "5+", label: "Drugs Supported" },
   { value: "24/7", label: "Availability" },
 ];
 
@@ -77,7 +77,7 @@ const Index = () => {
               transition={{ duration: 0.8 }}
               className="text-center lg:text-left"
             >
-              <motion.div
+              {/* <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
@@ -85,7 +85,7 @@ const Index = () => {
               >
                 <Sparkles className="w-4 h-4 text-primary" />
                 <span className="text-sm font-medium text-foreground">AI-Powered Precision Medicine</span>
-              </motion.div>
+              </motion.div> */}
 
               <motion.h1
                 initial={{ opacity: 0, y: 20 }}

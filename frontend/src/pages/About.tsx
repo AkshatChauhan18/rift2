@@ -7,7 +7,7 @@ const features = [
   {
     icon: Target,
     title: "Mission",
-    desc: "Adverse drug reactions cause over 100,000 deaths annually — many preventable with pharmacogenomic testing. PharmaGuard makes precision medicine accessible by combining genomic variant analysis with AI-powered clinical explanations.",
+    desc: "Adverse drug reactions cause over 100,000 deaths annually — many preventable with pharmacogenomic testing. IntelliGene makes precision medicine accessible by combining genomic variant analysis with AI-powered clinical explanations.",
     color: "from-primary/20 to-primary/5",
     iconColor: "text-primary",
   },
@@ -21,7 +21,7 @@ const features = [
   {
     icon: Users,
     title: "Team",
-    desc: "Built by Team PharmaGuard for the PS3 HealthTech Hackathon. We believe in making pharmacogenomics practical, accessible, and actionable for healthcare professionals worldwide.",
+    desc: "Built by Team RiftRizzers for the RIFT 2026 Hackathon. We believe in making pharmacogenomics practical, accessible, and actionable for healthcare professionals worldwide.",
     color: "from-success/20 to-success/5",
     iconColor: "text-success",
   },
@@ -29,8 +29,8 @@ const features = [
 
 const stats = [
   { icon: Shield, value: "99.9%", label: "Accuracy Rate" },
-  { icon: Zap, value: "<2s", label: "Analysis Time" },
-  { icon: Dna, value: "50+", label: "Drugs Supported" },
+  { icon: Zap, value: "<5s", label: "Analysis Time" },
+  { icon: Dna, value: "5+", label: "Drugs Supported" },
   { icon: Sparkles, value: "AI", label: "Powered" },
 ];
 
@@ -53,8 +53,8 @@ const About = () => (
             transition={{ delay: 0.2 }}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-card mb-6"
           >
-            <Sparkles className="w-4 h-4 text-primary" />
-            <span className="text-sm font-medium">About PharmaGuard</span>
+            {/* <Sparkles className="w-4 h-4 text-primary" /> */}
+            <span className="text-sm font-medium">About IntelliGene</span>
           </motion.div>
 
           <h1 className="font-display text-4xl md:text-5xl font-bold text-foreground mb-4">
