@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 import uuid
 import os
+import json
 
 load_dotenv()
 
@@ -95,13 +96,23 @@ def predict_risk(drug: str, phenotype: str, confidence: float = 0.8):
 
 def _fallback_explanation(gene: str, phenotype: str, drug: str):
     return {
-        "summary": f"{gene} {phenotype} phenotype may affect response to {drug}. "
-        f"Dose adjustment or alternative therapy may be needed.",
+        "summary": f"{gene} {phenotype} phenotype may affect {drug} response.",
+        "detailed_explanation": f"The {gene} gene encodes enzymes responsible for metabolizing {drug}. A {phenotype} phenotype indicates altered enzyme activity, which may result in unexpected drug levels or therapeutic effects.",
+        "biological_mechanism": f"{gene} variants affect enzyme function, altering the rate at which {drug} is metabolized in the body.",
+        "variant_explanation": f"{phenotype} phenotype detected, suggesting modified drug metabolism.",
+        "clinical_recommendation": "Consult CPIC guidelines and consider dose adjustment or alternative therapy.",
+        "dosage_recommendation": "Healthcare provider evaluation required for dosage adjustment.",
+        "warnings": [
+            "Consult healthcare provider before making any medication changes",
+            "Monitor for adverse drug reactions",
+        ],
         "provider": "fallback",
     }
 
 
-def generate_explanation(gene: str, phenotype: str, drug: str, risk_label: str):
+def generate_explanation(
+    gene: str, phenotype: str, drug: str, risk_label: str, diplotype: str = "Unknown"
+):
     api_key = os.getenv("OPENAI_API_KEY")
     model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
@@ -119,25 +130,64 @@ def generate_explanation(gene: str, phenotype: str, drug: str, risk_label: str):
         client = OpenAI(api_key=api_key)
 
         prompt = (
-            "You are a clinical pharmacogenomics assistant. "
-            "Generate a concise, patient-safe explanation in 2-3 sentences. "
-            "Do not provide definitive medical advice.\n\n"
+            "You are a clinical pharmacogenomics assistant. Generate a structured JSON response with exactly 7 fields. "
+            "Be concise, patient-safe, and avoid definitive medical advice.\n\n"
             f"Drug: {drug.upper()}\n"
             f"Gene: {gene}\n"
+            f"Diplotype: {diplotype}\n"
             f"Phenotype: {phenotype}\n"
-            f"Risk label: {risk_label}\n"
-            "Focus on why this genotype may affect response and what clinician follow-up is appropriate."
+            f"Risk label: {risk_label}\n\n"
+            "Return ONLY valid JSON in this exact format:\n"
+            "{\n"
+            '  "summary": "1-2 sentence overview of the pharmacogenomic interaction",\n'
+            '  "detailed_explanation": "3-4 sentences explaining the clinical significance",\n'
+            '  "biological_mechanism": "2-3 sentences explaining how the gene variant affects drug metabolism",\n'
+            '  "variant_explanation": "1-2 sentences about the specific diplotype/phenotype impact",\n'
+            '  "clinical_recommendation": "2-3 sentences with actionable clinical recommendations based on CPIC guidelines",\n'
+            '  "dosage_recommendation": "1-2 sentences about specific dosage adjustments if applicable",\n'
+            '  "warnings": ["array of 2-3 short warning strings about important safety considerations"]\n'
+            "}"
         )
 
-        response = client.responses.create(model=model_name, input=prompt)
-        text = (response.output_text or "").strip()
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+        )
+
+        text = (response.choices[0].message.content or "").strip()
 
         if not text:
             explanation = _fallback_explanation(gene, phenotype, drug)
             explanation["reason"] = "OpenAI returned empty response"
             return explanation
 
-        return {"summary": text, "provider": "openai", "model": model_name}
+        # Parse JSON response
+        parsed = json.loads(text)
+
+        # Validate required fields
+        required_fields = [
+            "summary",
+            "detailed_explanation",
+            "biological_mechanism",
+            "variant_explanation",
+            "clinical_recommendation",
+            "dosage_recommendation",
+            "warnings",
+        ]
+        if not all(field in parsed for field in required_fields):
+            explanation = _fallback_explanation(gene, phenotype, drug)
+            explanation["reason"] = "OpenAI response missing required fields"
+            return explanation
+
+        parsed["provider"] = "openai"
+        parsed["model"] = model_name
+        return parsed
+
+    except json.JSONDecodeError as exc:
+        explanation = _fallback_explanation(gene, phenotype, drug)
+        explanation["reason"] = f"Failed to parse OpenAI JSON response: {str(exc)}"
+        return explanation
     except Exception as exc:
         explanation = _fallback_explanation(gene, phenotype, drug)
         explanation["reason"] = f"OpenAI call failed: {str(exc)}"
@@ -175,7 +225,9 @@ async def analyze_json(payload: AnalyzeRequest):
     risk = predict_risk(drug, phenotype, cpic_confidence)
 
     # LLM Explanation
-    explanation = generate_explanation(gene, phenotype, drug, risk["risk_label"])
+    explanation = generate_explanation(
+        gene, phenotype, drug, risk["risk_label"], diplotype
+    )
 
     # Construct REQUIRED JSON schema
     response = {
@@ -194,9 +246,23 @@ async def analyze_json(payload: AnalyzeRequest):
             "detected_variants": variants,
         },
         "clinical_recommendation": {
-            "note": "Refer to CPIC guidelines before prescribing."
+            "summary": explanation.get(
+                "clinical_recommendation",
+                "Refer to CPIC guidelines before prescribing.",
+            ),
+            "dosage_recommendation": explanation.get(
+                "dosage_recommendation", "Consult healthcare provider."
+            ),
+            "warnings": explanation.get(
+                "warnings", ["Consult healthcare provider before making any changes"]
+            ),
         },
-        "llm_generated_explanation": explanation,
+        "llm_generated_explanation": {
+            "summary": explanation.get("summary", ""),
+            "detailed_explanation": explanation.get("detailed_explanation", ""),
+            "biological_mechanism": explanation.get("biological_mechanism", ""),
+            "variant_explanation": explanation.get("variant_explanation", ""),
+        },
         "quality_metrics": {
             "json_parsing_success": True,
             "supported_drug": True,
