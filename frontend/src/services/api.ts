@@ -2,9 +2,8 @@ import { AnalysisResult } from "@/utils/mockData";
 import { parseVcfFile, buildPharmaProfile } from "@/utils/vcfParser";
 
 // API Configuration
-// For local development: const API_BASE = "http://127.0.0.1:8000";
-const API_BASE = "https://rift2.onrender.com";
-// const API_BASE = "http://127.0.0.1:8000";
+// Uses Vite env var when available, with Render fallback for production.
+const API_BASE = import.meta.env.VITE_API_URL || "https://rift2.onrender.com";
 
 /**
  * Analyze VCF file using the backend API
