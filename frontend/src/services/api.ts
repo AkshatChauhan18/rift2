@@ -210,6 +210,11 @@ export interface VariantSummaryResponse {
     gene: string;
     variant_info?: string;
   };
+  risk_assessment: {
+    risk_label: "Safe" | "Adjust Dosage" | "Toxic" | "Ineffective" | "Unknown";
+    confidence_score: number;
+    severity: "none" | "low" | "moderate" | "high" | "critical";
+  };
   pharmacogenomic_profile: {
     primary_gene: string;
     diplotype: string;

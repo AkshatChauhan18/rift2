@@ -130,8 +130,8 @@ const ExplanationAccordion = ({
         transition={{ delay: 0.6 }}
         className="mt-6 flex items-center justify-center gap-2 text-xs text-muted-foreground"
       >
-        <Sparkles className="w-3 h-3" />
-        <span>Generated with AI · Verified by clinical guidelines</span>
+        {/* <Sparkles className="w-3 h-3" /> */}
+        {/* <span>Generated with AI · Verified by clinical guidelines</span> */}
       </motion.div>
     </motion.div>
   );

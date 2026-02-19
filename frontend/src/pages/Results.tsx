@@ -69,6 +69,17 @@ const Results = () => {
         if (!prev) return prev;
         return {
           ...prev,
+          risk_assessment: {
+            risk_label:
+              llmExplanation?.risk_assessment?.risk_label ||
+              prev.risk_assessment.risk_label,
+            confidence_score:
+              llmExplanation?.risk_assessment?.confidence_score ??
+              prev.risk_assessment.confidence_score,
+            severity:
+              llmExplanation?.risk_assessment?.severity ||
+              prev.risk_assessment.severity,
+          },
           pharmacogenomic_profile: {
             ...prev.pharmacogenomic_profile,
             primary_gene:
