@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import PageTransition from "@/components/PageTransition";
 import Index from "./pages/Index";
 import Analysis from "./pages/Analysis";
+import Results from "./pages/Results";
 import About from "./pages/About";
 import NotFound from "./pages/NotFound";
 
@@ -28,6 +29,8 @@ const App = () => {
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/analysis" element={<Analysis />} />
+              <Route path="/analyze" element={<Analysis />} />
+              <Route path="/results" element={<Results />} />
               <Route path="/about" element={<About />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

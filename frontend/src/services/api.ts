@@ -1,30 +1,216 @@
-import { AnalysisResult, mockResult } from "@/utils/mockData";
+import { AnalysisResult } from "@/utils/mockData";
 
-const API_BASE = "/api";
+// API Configuration
+const API_BASE = "https://rift2.onrender.com";
 
+/**
+ * Analyze VCF file using the backend API
+ */
 export async function analyzeRisk(
   file: File,
   drugs: string[]
 ): Promise<AnalysisResult> {
-  // In production, uncomment below and remove mock:
-  //
-  // const formData = new FormData();
-  // formData.append("file", file);
-  // formData.append("drugs", drugs.join(","));
-  //
-  // const res = await fetch(`${API_BASE}/analyze`, {
-  //   method: "POST",
-  //   body: formData,
-  // });
-  //
-  // if (!res.ok) throw new Error(`Server error: ${res.status}`);
-  // return res.json();
+  try {
+    console.log("🔄 Starting analysis...");
+    console.log("📁 File:", file.name, file.size, "bytes");
+    console.log("💊 Drugs:", drugs);
+    
+    // Read file content
+    const fileContent = await file.text();
+    console.log("📄 File content length:", fileContent.length);
 
-  // Mock: simulate network delay and return mock data
-  await new Promise((r) => setTimeout(r, 2500));
-  return {
-    ...mockResult,
-    drug: drugs[0],
-    timestamp: new Date().toISOString(),
-  };
+    // Map drug to primary gene
+    const GENE_DRUG_MAP: Record<string, string> = {
+      'CODEINE': 'CYP2D6',
+      'WARFARIN': 'CYP2C9',
+      'CLOPIDOGREL': 'CYP2C19',
+      'SIMVASTATIN': 'SLCO1B1',
+      'AZATHIOPRINE': 'TPMT',
+      'FLUOROURACIL': 'DPYD',
+    };
+
+    const drug = drugs[0].toUpperCase();
+    const primaryGene = GENE_DRUG_MAP[drug] || 'CYP2D6';
+
+    // Create JSON payload with all required fields
+    const payload = {
+      vcf_content: fileContent,
+      drug: drug,
+      primary_gene: primaryGene,
+      drugs: drugs
+    };
+
+    console.log("📤 Sending request to:", `${API_BASE}/analyze`);
+    console.log("📦 Payload:", { 
+      vcf_length: fileContent.length, 
+      drug,
+      primary_gene: primaryGene,
+      drugs 
+    });
+
+    // Call backend API with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout for AI processing
+
+    const res = await fetch(`${API_BASE}/analyze`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    console.log("📥 Response status:", res.status, res.statusText);
+
+    if (!res.ok) {
+      // Try to parse error response
+      let errorMessage = `Server returned ${res.status}: ${res.statusText}`;
+      try {
+        const errorData = await res.json();
+        console.error("❌ Error response:", errorData);
+        
+        // Handle different error formats
+        if (typeof errorData === 'string') {
+          errorMessage = errorData;
+        } else if (errorData.detail) {
+          // FastAPI format - detail can be string or array
+          if (typeof errorData.detail === 'string') {
+            errorMessage = errorData.detail;
+          } else if (Array.isArray(errorData.detail)) {
+            // Validation errors array
+            errorMessage = errorData.detail.map((err: any) => {
+              if (typeof err === 'string') return err;
+              if (err.msg) return `${err.loc?.join('.') || 'Field'}: ${err.msg}`;
+              return JSON.stringify(err);
+            }).join(', ');
+          } else {
+            errorMessage = JSON.stringify(errorData.detail);
+          }
+        } else if (errorData.message) {
+          errorMessage = errorData.message;
+        } else if (errorData.error) {
+          errorMessage = errorData.error;
+        } else {
+          // Fallback: stringify the entire error object
+          errorMessage = JSON.stringify(errorData, null, 2);
+        }
+      } catch (parseError) {
+        console.error("Failed to parse error response:", parseError);
+        // If JSON parsing fails, try to get text
+        try {
+          const errorText = await res.text();
+          if (errorText) {
+            errorMessage = errorText.substring(0, 200); // Limit length
+          }
+        } catch {
+          // Use default error message
+        }
+      }
+      throw new Error(errorMessage);
+    }
+
+    const data = await res.json();
+    console.log("✅ Analysis complete!");
+    console.log("📊 Full Response:", JSON.stringify(data, null, 2));
+    console.log("🔍 Response structure:", {
+      patient_id: data.patient_id,
+      drug: data.drug,
+      risk_label: data.risk_assessment?.risk_label,
+      severity: data.risk_assessment?.severity,
+      confidence: data.risk_assessment?.confidence_score,
+      gene: data.pharmacogenomic_profile?.primary_gene,
+      phenotype: data.pharmacogenomic_profile?.phenotype,
+      has_explanation: !!data.llm_generated_explanation,
+      has_recommendation: !!data.clinical_recommendation
+    });
+
+    // Transform backend response to match frontend AnalysisResult interface
+    const result: AnalysisResult = {
+      patient_id: data.patient_id || `PG-${new Date().getFullYear()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
+      drug: data.drug || drugs[0].toUpperCase(),
+      timestamp: data.timestamp || new Date().toISOString(),
+      risk_assessment: {
+        risk_label: data.risk_assessment?.risk_label || "Unknown",
+        confidence_score: data.risk_assessment?.confidence_score || 0.5,
+        severity: data.risk_assessment?.severity || "none",
+      },
+      pharmacogenomic_profile: {
+        primary_gene: data.pharmacogenomic_profile?.primary_gene || "Unknown",
+        diplotype: data.pharmacogenomic_profile?.diplotype || "*1/*1",
+        phenotype: data.pharmacogenomic_profile?.phenotype || "Normal Metabolizer",
+        detected_variants: data.pharmacogenomic_profile?.detected_variants || [],
+      },
+      clinical_recommendation: {
+        summary: data.clinical_recommendation?.summary || "No recommendation available.",
+        dosage_recommendation: data.clinical_recommendation?.dosage_recommendation || "Consult healthcare provider.",
+        warnings: data.clinical_recommendation?.warnings || ["Consult healthcare provider"],
+      },
+      llm_generated_explanation: {
+        summary: data.llm_generated_explanation?.summary || "Analysis completed.",
+        detailed_explanation: data.llm_generated_explanation?.detailed_explanation || "Detailed explanation not available.",
+        biological_mechanism: data.llm_generated_explanation?.biological_mechanism || "Biological mechanism not available.",
+        variant_explanation: data.llm_generated_explanation?.variant_explanation || "Variant explanation not available.",
+      },
+      quality_metrics: {
+        vcf_parsing_success: data.quality_metrics?.vcf_parsing_success ?? true,
+        variants_analyzed: data.quality_metrics?.variants_analyzed || 0,
+        gene_coverage: data.quality_metrics?.gene_coverage || 0,
+      },
+    };
+
+    return result;
+  } catch (error) {
+    console.error("❌ Analysis failed:", error);
+    
+    // Handle abort/timeout
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error("Request timeout: The server took too long to respond. Please try again.");
+    }
+    
+    // Handle network errors
+    if (error instanceof TypeError) {
+      throw new Error("Network error: Unable to connect to the server. Please check your internet connection and ensure the backend is running.");
+    }
+    
+    // Handle Error objects
+    if (error instanceof Error) {
+      throw new Error(error.message);
+    }
+    
+    // Fallback for unknown errors
+    console.error("Unknown error type:", typeof error, error);
+    throw new Error("An unexpected error occurred. Please try again or contact support.");
+  }
+}
+
+// Backend health check
+export async function checkHealth(): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/`, {
+      method: "GET",
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// Supported drugs (hardcoded - matches backend)
+export async function getSupportedDrugs(): Promise<string[]> {
+  return [
+    "CODEINE",
+    "WARFARIN",
+    "CLOPIDOGREL",
+    "SIMVASTATIN",
+    "AZATHIOPRINE",
+    "FLUOROURACIL",
+  ];
+}
+
+// Supported genes (hardcoded - matches backend)
+export async function getSupportedGenes(): Promise<string[]> {
+  return ["CYP2D6", "CYP2C19", "CYP2C9", "SLCO1B1", "TPMT", "DPYD"];
 }

@@ -164,7 +164,7 @@ async def analyze_json(payload: AnalyzeRequest):
     response = {
         "patient_id": f"PATIENT_{uuid.uuid4().hex[:6].upper()}",
         "drug": drug,
-        "timestamp": datetime.now(datetime.timezone.utc).isoformat() + "Z",
+        "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "Z",
         "risk_assessment": {
             "risk_label": risk["risk_label"],
             "confidence_score": risk["confidence"],

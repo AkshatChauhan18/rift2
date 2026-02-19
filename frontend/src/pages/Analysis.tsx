@@ -1,41 +1,45 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import FileUpload from "@/components/FileUpload";
 import DrugInput from "@/components/DrugInput";
-import RiskCard from "@/components/RiskCard";
-import ProfileCard from "@/components/ProfileCard";
-import RecommendationCard from "@/components/RecommendationCard";
-import ExplanationAccordion from "@/components/ExplanationAccordion";
-import QualityMetrics from "@/components/QualityMetrics";
-import DownloadButtons from "@/components/DownloadButtons";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import ErrorAlert from "@/components/ErrorAlert";
 import { analyzeRisk } from "@/services/api";
-import { AnalysisResult } from "@/utils/mockData";
 import { FlaskConical, Sparkles } from "lucide-react";
 
 const Analysis = () => {
+  const navigate = useNavigate();
   const [file, setFile] = useState<File | null>(null);
   const [drugs, setDrugs] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const canAnalyze = file !== null && drugs.length > 0 && !loading;
 
   const handleAnalyze = async () => {
     if (!file || drugs.length === 0) return;
+    
+    console.log("🎯 handleAnalyze called");
+    console.log("📁 File:", file);
+    console.log("💊 Drugs:", drugs);
+    
     setLoading(true);
     setError(null);
-    setResult(null);
+    
     try {
+      console.log("🚀 Calling analyzeRisk...");
       const data = await analyzeRisk(file, drugs);
-      setResult(data);
+      console.log("✅ Got data from API:", data);
+      console.log("🧭 Navigating to /results with data");
+      
+      // Navigate to results page with data
+      navigate("/results", { state: { result: data } });
     } catch (e: any) {
+      console.error("❌ Error in handleAnalyze:", e);
       setError(e.message || "An unexpected error occurred. Please try again.");
-    } finally {
       setLoading(false);
     }
   };
@@ -136,77 +140,6 @@ const Analysis = () => {
                 className="glass-card rounded-2xl p-8"
               >
                 <LoadingSpinner />
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Results */}
-          <AnimatePresence>
-            {result && !loading && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 20 }}
-                transition={{ duration: 0.6 }}
-                className="space-y-6"
-              >
-                {/* Results Header */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className="glass-card rounded-2xl p-6"
-                >
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                      <h2 className="font-display text-2xl font-bold text-foreground mb-1">
-                        Analysis Results — {result.drug}
-                      </h2>
-                      <p className="text-sm text-muted-foreground">
-                        Patient: {result.patient_id} · {new Date(result.timestamp).toLocaleString()}
-                      </p>
-                    </div>
-                    <DownloadButtons data={result} />
-                  </div>
-                </motion.div>
-
-                {/* Risk Card */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                >
-                  <RiskCard data={result} />
-                </motion.div>
-
-                {/* Profile and Recommendation */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
-                  className="grid grid-cols-1 lg:grid-cols-2 gap-6"
-                >
-                  <ProfileCard data={result} />
-                  <RecommendationCard data={result} />
-                </motion.div>
-
-                {/* Explanation */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 }}
-                >
-                  <ExplanationAccordion data={result} />
-                </motion.div>
-
-                {/* Quality Metrics */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5 }}
-                >
-                  <QualityMetrics data={result} />
-                </motion.div>
               </motion.div>
             )}
           </AnimatePresence>

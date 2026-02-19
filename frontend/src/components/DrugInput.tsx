@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SUPPORTED_DRUGS } from "@/utils/validation";
-import { X, AlertCircle, ChevronDown, Search, Pill } from "lucide-react";
+import { X, AlertCircle, ChevronDown, Pill } from "lucide-react";
 
 interface DrugInputProps {
   drugs: string[];
@@ -10,12 +10,7 @@ interface DrugInputProps {
 
 const DrugInput = ({ drugs, onDrugsChange }: DrugInputProps) => {
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
-
-  const filteredDrugs = SUPPORTED_DRUGS.filter((drug) =>
-    drug.toLowerCase().includes(search.toLowerCase())
-  );
 
   const toggleDrug = (drug: string) => {
     setError(null);
@@ -38,13 +33,14 @@ const DrugInput = ({ drugs, onDrugsChange }: DrugInputProps) => {
       </label>
 
       {/* Selected pills */}
-      <AnimatePresence>
+      <AnimatePresence mode="popLayout">
         {drugs.length > 0 && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="flex flex-wrap gap-2 mb-3"
+            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+            className="flex flex-wrap gap-2 mb-3 overflow-hidden"
           >
             {drugs.map((drug, idx) => (
               <motion.span
@@ -52,7 +48,11 @@ const DrugInput = ({ drugs, onDrugsChange }: DrugInputProps) => {
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
-                transition={{ delay: idx * 0.05 }}
+                transition={{ 
+                  delay: idx * 0.05,
+                  duration: 0.2,
+                  ease: [0.4, 0, 0.2, 1]
+                }}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-primary/10 to-secondary/10 border border-primary/20 text-primary text-xs font-semibold"
               >
                 {drug}
@@ -87,7 +87,7 @@ const DrugInput = ({ drugs, onDrugsChange }: DrugInputProps) => {
           </span>
           <motion.div
             animate={{ rotate: open ? 180 : 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
           >
             <ChevronDown className="w-5 h-5 text-muted-foreground" />
           </motion.div>
@@ -96,60 +96,54 @@ const DrugInput = ({ drugs, onDrugsChange }: DrugInputProps) => {
         <AnimatePresence>
           {open && (
             <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-              className="absolute z-20 mt-2 w-full rounded-xl border border-border glass-card-strong shadow-2xl overflow-hidden"
+              initial={{ opacity: 0, scale: 0.95, y: -8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: -8 }}
+              transition={{ 
+                duration: 0.2,
+                ease: [0.4, 0, 0.2, 1]
+              }}
+              className="absolute z-20 mt-2 w-full rounded-xl border border-border glass-card-strong shadow-2xl overflow-hidden origin-top"
             >
-              {/* Search */}
-              <div className="p-3 border-b border-border">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input
-                    type="text"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search drugs..."
-                    className="w-full pl-10 pr-4 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                </div>
-              </div>
-
               {/* Drug List */}
               <div className="max-h-64 overflow-y-auto">
-                {filteredDrugs.length > 0 ? (
-                  filteredDrugs.map((drug, idx) => (
-                    <motion.button
-                      key={drug}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: idx * 0.02 }}
-                      type="button"
-                      onClick={() => toggleDrug(drug)}
-                      className={`w-full text-left px-4 py-3 text-sm transition-all ${
-                        drugs.includes(drug)
-                          ? "bg-primary/10 text-primary font-semibold border-l-4 border-primary"
-                          : "text-foreground hover:bg-muted"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span>{drug}</span>
-                        {drugs.includes(drug) && (
-                          <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            className="w-2 h-2 rounded-full bg-primary"
-                          />
-                        )}
-                      </div>
-                    </motion.button>
-                  ))
-                ) : (
-                  <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                    No drugs found
-                  </div>
-                )}
+                {SUPPORTED_DRUGS.map((drug, idx) => (
+                  <motion.button
+                    key={drug}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ 
+                      delay: idx * 0.03,
+                      duration: 0.2
+                    }}
+                    type="button"
+                    onClick={() => {
+                      toggleDrug(drug);
+                      setOpen(false);
+                    }}
+                    className={`w-full text-left px-4 py-3 text-sm transition-all ${
+                      drugs.includes(drug)
+                        ? "bg-primary/10 text-primary font-semibold border-l-4 border-primary"
+                        : "text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>{drug}</span>
+                      {drugs.includes(drug) && (
+                        <motion.div
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          transition={{ 
+                            type: "spring",
+                            stiffness: 500,
+                            damping: 30
+                          }}
+                          className="w-2 h-2 rounded-full bg-primary"
+                        />
+                      )}
+                    </div>
+                  </motion.button>
+                ))}
               </div>
             </motion.div>
           )}
@@ -162,6 +156,7 @@ const DrugInput = ({ drugs, onDrugsChange }: DrugInputProps) => {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
             className="flex items-center gap-2 mt-3 p-3 rounded-xl bg-destructive/10 border border-destructive/20"
           >
             <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
