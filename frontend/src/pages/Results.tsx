@@ -12,15 +12,21 @@ import DownloadButtons from "@/components/DownloadButtons";
 import { AnalysisResult } from "@/utils/mockData";
 import { ArrowLeft, Loader2, Sparkles } from "lucide-react";
 import { analyzeVariantSummary } from "@/services/api";
+import { useToast } from "@/components/ui/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { saveAnalysisResult } from "@/lib/supabase";
 
 const Results = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const { user } = useAuth();
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [selectedVariantKey, setSelectedVariantKey] = useState<string | null>(null);
   const [selectedVariantRsid, setSelectedVariantRsid] = useState<string | null>(null);
   const [explanationLoading, setExplanationLoading] = useState(false);
   const [explanation, setExplanation] = useState<AnalysisResult["llm_generated_explanation"] | undefined>(undefined);
+  const [saveLoading, setSaveLoading] = useState(false);
 
   useEffect(() => {
     console.log("🎬 Results page mounted");
@@ -133,6 +139,37 @@ const Results = () => {
     }
   };
 
+  const handleSave = async () => {
+    if (!result) return;
+
+    if (!user) {
+      toast({
+        title: "Login required",
+        description: "Please log in to save this analysis result.",
+      });
+      navigate("/auth", { state: { redirectTo: "/results", result } });
+      return;
+    }
+
+    setSaveLoading(true);
+    try {
+      await saveAnalysisResult(user.id, result);
+      toast({
+        title: "Saved",
+        description: "Analysis result saved to Supabase.",
+      });
+    } catch (error) {
+      toast({
+        title: "Save failed",
+        description:
+          error instanceof Error ? error.message : "Unable to save result.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaveLoading(false);
+    }
+  };
+
   if (!result) {
     return null;
   }
@@ -207,7 +244,16 @@ const Results = () => {
                     Patient: {result.patient_id} · {new Date(result.timestamp).toLocaleString()}
                   </p>
                 </div>
-                <DownloadButtons data={result} />
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    onClick={handleSave}
+                    disabled={saveLoading}
+                    className="px-4 py-2 rounded-xl border border-border bg-card text-foreground text-sm font-medium hover:border-primary/50 transition-all disabled:opacity-60"
+                  >
+                    {saveLoading ? "Saving..." : "Save to Supabase"}
+                  </button>
+                  <DownloadButtons data={result} />
+                </div>
               </div>
             </motion.div>
 

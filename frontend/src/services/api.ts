@@ -139,7 +139,7 @@ export async function analyzeRisk(
       drug: data.drug || drugs[0].toUpperCase(),
       timestamp: data.timestamp || new Date().toISOString(),
       risk_assessment: {
-        risk_label: data.risk_assessment?.risk_label || "poop",
+        risk_label: data.risk_assessment?.risk_label || "Unknown",
         confidence_score: data.risk_assessment?.confidence_score || 0.5,
         severity: data.risk_assessment?.severity || "none",
       },
@@ -163,7 +163,9 @@ export async function analyzeRisk(
       quality_metrics: {
         vcf_parsing_success: data.quality_metrics?.json_parsing_success ?? true,
         variants_analyzed: data.pharmacogenomic_profile?.detected_variants?.length || 0,
-        gene_coverage: data.quality_metrics?.gene_coverage || data.quality_metrics?.supported_gene ? 100 : 0,
+        gene_coverage:
+          data.quality_metrics?.gene_coverage ??
+          (data.quality_metrics?.supported_gene ? 100 : 0),
       },
     };
 
@@ -234,6 +236,128 @@ export interface VariantSummaryResponse {
   provider?: string;
 }
 
+type PhenotypeBand = "PM" | "IM" | "NM" | "RM" | "URM" | "UNKNOWN";
+
+function normalizePhenotype(raw?: string): PhenotypeBand {
+  const value = (raw || "").toUpperCase();
+  if (value.includes("URM") || value.includes("ULTRA")) return "URM";
+  if (value.includes("RM") || value.includes("RAPID")) return "RM";
+  if (value.includes("PM") || value.includes("POOR")) return "PM";
+  if (value.includes("IM") || value.includes("INTERMEDIATE")) return "IM";
+  if (value.includes("NM") || value.includes("NORMAL")) return "NM";
+  return "UNKNOWN";
+}
+
+function inferPhenotypeFromVariantInfo(
+  fallbackPhenotype: PhenotypeBand,
+  variantInfo?: string,
+): PhenotypeBand {
+  const text = (variantInfo || "").toLowerCase();
+
+  if (
+    text.includes("no function") ||
+    text.includes("loss") ||
+    text.includes("splice") ||
+    text.includes("null") ||
+    text.includes("*4") ||
+    text.includes("*5") ||
+    text.includes("*6") ||
+    text.includes("*13")
+  ) {
+    return "PM";
+  }
+
+  if (
+    text.includes("decreased") ||
+    text.includes("reduced") ||
+    text.includes("partial") ||
+    text.includes("*2") ||
+    text.includes("*3") ||
+    text.includes("*10")
+  ) {
+    return "IM";
+  }
+
+  if (
+    text.includes("increased") ||
+    text.includes("gain") ||
+    text.includes("*17") ||
+    text.includes("ultra") ||
+    text.includes("rapid")
+  ) {
+    return "URM";
+  }
+
+  return fallbackPhenotype;
+}
+
+function resolveVariantPhenotypeBand(
+  input: VariantSummaryInput,
+  responseData: Partial<VariantSummaryResponse>,
+): PhenotypeBand {
+  const phenotypeFromResponse = normalizePhenotype(
+    responseData?.pharmacogenomic_profile?.phenotype,
+  );
+  const basePhenotype =
+    phenotypeFromResponse === "UNKNOWN"
+      ? normalizePhenotype(input.phenotype)
+      : phenotypeFromResponse;
+
+  return inferPhenotypeFromVariantInfo(
+    basePhenotype,
+    input.variant.variant_info || responseData?.variant?.variant_info,
+  );
+}
+
+function phenotypeBandToLabel(phenotype: PhenotypeBand): string {
+  if (phenotype === "PM") return "Poor Metabolizer";
+  if (phenotype === "IM") return "Intermediate Metabolizer";
+  if (phenotype === "NM") return "Normal Metabolizer";
+  if (phenotype === "RM") return "Rapid Metabolizer";
+  if (phenotype === "URM") return "Ultra-rapid Metabolizer";
+  return "Unknown";
+}
+
+function buildVariantRiskAssessment(
+  input: VariantSummaryInput,
+  phenotype: PhenotypeBand,
+): VariantSummaryResponse["risk_assessment"] {
+  const drug = input.drug.toUpperCase();
+
+  let risk_label: VariantSummaryResponse["risk_assessment"]["risk_label"] =
+    "Unknown";
+  let severity: VariantSummaryResponse["risk_assessment"]["severity"] = "none";
+  let confidence_score = 0.64;
+
+  if (phenotype === "PM") {
+    if (drug === "CLOPIDOGREL") {
+      risk_label = "Ineffective";
+    } else {
+      risk_label = "Toxic";
+    }
+    severity = "high";
+    confidence_score = 0.9;
+  } else if (phenotype === "IM") {
+    risk_label = "Adjust Dosage";
+    severity = "moderate";
+    confidence_score = 0.78;
+  } else if (phenotype === "URM" || phenotype === "RM") {
+    risk_label = drug === "CODEINE" ? "Toxic" : "Adjust Dosage";
+    severity = "moderate";
+    confidence_score = 0.74;
+  } else if (phenotype === "NM") {
+    risk_label = "Safe";
+    severity = "low";
+    confidence_score = 0.64;
+  }
+
+  return {
+    risk_label,
+    severity,
+    confidence_score,
+  };
+}
+
 export async function analyzeVariantSummary(
   input: VariantSummaryInput
 ): Promise<VariantSummaryResponse> {
@@ -265,7 +389,50 @@ export async function analyzeVariantSummary(
   }
 
   const data = await res.json();
-  return data as VariantSummaryResponse;
+  const normalizedData = data as Partial<VariantSummaryResponse>;
+  const variantPhenotypeBand = resolveVariantPhenotypeBand(input, normalizedData);
+
+  return {
+    variant: {
+      rsid: normalizedData.variant?.rsid || input.variant.rsid,
+      gene: normalizedData.variant?.gene || input.variant.gene,
+      variant_info: normalizedData.variant?.variant_info || input.variant.variant_info,
+    },
+    risk_assessment: buildVariantRiskAssessment(input, variantPhenotypeBand),
+    pharmacogenomic_profile: {
+      primary_gene:
+        normalizedData.pharmacogenomic_profile?.primary_gene || input.primary_gene,
+      diplotype:
+        normalizedData.pharmacogenomic_profile?.diplotype || input.diplotype,
+      phenotype: phenotypeBandToLabel(variantPhenotypeBand),
+    },
+    clinical_recommendation: {
+      summary:
+        normalizedData.clinical_recommendation?.summary ||
+        "Refer to CPIC guidelines before prescribing.",
+      dosage_recommendation:
+        normalizedData.clinical_recommendation?.dosage_recommendation ||
+        "Consult healthcare provider.",
+      warnings:
+        normalizedData.clinical_recommendation?.warnings ||
+        ["Consult healthcare provider before making any changes"],
+    },
+    llm_generated_explanation: {
+      summary:
+        normalizedData.llm_generated_explanation?.summary ||
+        `Summary unavailable for ${input.variant.rsid}.`,
+      detailed_explanation:
+        normalizedData.llm_generated_explanation?.detailed_explanation ||
+        `Detailed explanation unavailable for ${input.variant.rsid}.`,
+      biological_mechanism:
+        normalizedData.llm_generated_explanation?.biological_mechanism ||
+        `Biological mechanism unavailable for ${input.variant.gene}.`,
+      variant_explanation:
+        normalizedData.llm_generated_explanation?.variant_explanation ||
+        `Variant explanation unavailable for ${input.variant.rsid}.`,
+    },
+    provider: normalizedData.provider,
+  };
 }
 
 // Backend health check

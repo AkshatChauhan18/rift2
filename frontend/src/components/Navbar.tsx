@@ -2,9 +2,13 @@ import { Link, useLocation } from "react-router-dom";
 import { Dna, Menu, X, Moon, Sun } from "lucide-react";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/components/ui/use-toast";
 
 const Navbar = () => {
   const location = useLocation();
+  const { user, signOut } = useAuth();
+  const { toast } = useToast();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
@@ -25,8 +29,17 @@ const Navbar = () => {
   const links = [
     { to: "/", label: "Home" },
     { to: "/analysis", label: "Analysis" },
+    ...(user ? [{ to: "/history", label: "History" }] : []),
     { to: "/about", label: "About" },
   ];
+
+  const handleSignOut = async () => {
+    await signOut();
+    toast({
+      title: "Logged out",
+      description: "Your session has been ended.",
+    });
+  };
 
   return (
     <motion.nav
@@ -78,6 +91,27 @@ const Navbar = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          {user ? (
+            <>
+              <span className="hidden md:inline text-xs text-muted-foreground max-w-[180px] truncate">
+                {user.email}
+              </span>
+              <button
+                onClick={handleSignOut}
+                className="px-3 py-2 rounded-xl border border-border text-sm font-medium text-foreground hover:border-primary/50 transition-all"
+              >
+                Logout
+              </button>
+            </>
+          ) : (
+            <Link
+              to="/auth"
+              className="px-3 py-2 rounded-xl border border-border text-sm font-medium text-foreground hover:border-primary/50 transition-all"
+            >
+              Login / Sign Up
+            </Link>
+          )}
+
           {/* Dark Mode Toggle */}
           <motion.button
             whileHover={{ scale: 1.1 }}
