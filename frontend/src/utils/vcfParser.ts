@@ -6,6 +6,9 @@
 export interface VcfVariant {
   rsid: string;
   gene: string;
+  starAllele?: string;
+  function?: string;
+  cpic?: string;
   genotype: string;
   chromosome: string;
   position: string;
@@ -15,7 +18,7 @@ export interface PharmaProfile {
   primary_gene: string;
   diplotype: string;
   phenotype: string;
-  detected_variants: Array<{ rsid: string; gene: string }>;
+  detected_variants: Array<{ rsid: string; gene: string; variant_info?: string }>;
   confidence?: number;
   cpic_evidence?: string;
   risk_level?: string;
@@ -121,6 +124,18 @@ export function parseVcfFile(content: string): VcfVariant[] {
   const lines = content.split('\n').filter(line => line.trim());
   const variants: VcfVariant[] = [];
 
+  const parseInfoField = (info: string): Record<string, string> => {
+    const values: Record<string, string> = {};
+    for (const token of info.split(';')) {
+      const [rawKey, ...rawValue] = token.split('=');
+      if (!rawKey) continue;
+      const key = rawKey.trim();
+      const value = rawValue.join('=').trim();
+      if (key) values[key] = value;
+    }
+    return values;
+  };
+
   for (const line of lines) {
     // Skip header lines
     if (line.startsWith('#')) continue;
@@ -129,15 +144,19 @@ export function parseVcfFile(content: string): VcfVariant[] {
     const columns = line.split(/\s+/);
     if (columns.length < 10) continue;
 
-    const [chrom, pos, id, ref, alt, qual, filter, info, format, sample] = columns;
+    const [chrom, pos, id, _ref, _alt, _qual, _filter, info, format, sample] = columns;
+
+    const infoValues = parseInfoField(info);
 
     // Extract rsID
-    const rsid = id.trim();
+    const rsid = (id && id !== '.' ? id : infoValues.RS || '').trim();
     if (!rsid || rsid === '.' || !rsid.startsWith('rs')) continue;
 
     // Extract GENE from INFO field
-    const geneMatch = info.match(/GENE=([^;]+)/);
-    const gene = geneMatch ? geneMatch[1].trim() : '';
+    const gene = (infoValues.GENE || '').trim();
+    const starAllele = (infoValues.STAR || '').trim();
+    const variantFunction = (infoValues.FUNC || '').trim();
+    const cpic = (infoValues.CPIC || '').trim();
 
     // Extract genotype from sample column
     const formatFields = format.split(':');
@@ -149,6 +168,9 @@ export function parseVcfFile(content: string): VcfVariant[] {
       variants.push({
         rsid,
         gene,
+        starAllele,
+        function: variantFunction,
+        cpic,
         genotype,
         chromosome: chrom,
         position: pos,
@@ -177,11 +199,11 @@ function inferGeneData(variants: VcfVariant[]): Record<string, {
 
     // Find variants for this gene
     for (const variant of variants) {
-      if (variant.gene === gene && geneMap[variant.rsid]) {
+      if (variant.gene === gene && (variant.starAllele || geneMap[variant.rsid])) {
         const gt = variant.genotype;
         
         if (gt !== "0/0" && gt !== "0|0") {
-          alleles.push(geneMap[variant.rsid]);
+          alleles.push(variant.starAllele || geneMap[variant.rsid]);
           gtScores.push(genotypeWeight(gt));
         }
       }
@@ -257,7 +279,11 @@ export function buildPharmaProfile(
     primary_gene: primaryGene,
     diplotype,
     phenotype,
-    detected_variants: variants.map(v => ({ rsid: v.rsid, gene: v.gene })),
+    detected_variants: variants.map(v => ({
+      rsid: v.rsid,
+      gene: v.gene,
+      variant_info: [v.starAllele, v.function].filter(Boolean).join(" · "),
+    })),
     confidence,
     cpic_evidence: rule.evidence,
     risk_level: riskLevel,

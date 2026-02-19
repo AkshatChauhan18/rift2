@@ -49,6 +49,7 @@ PHENOTYPE_RISK_MAP = {
 class VariantInput(BaseModel):
     rsid: str
     gene: Optional[str] = None
+    variant_info: Optional[str] = None
 
 
 class AnalyzeRequest(BaseModel):
@@ -60,6 +61,17 @@ class AnalyzeRequest(BaseModel):
     confidence: Optional[float] = None  # CPIC confidence from frontend
     cpic_evidence: Optional[str] = None
     risk_level: Optional[str] = None
+    include_explanation: bool = True
+
+
+class VariantSummaryRequest(BaseModel):
+    drug: str
+    primary_gene: str
+    phenotype: str = "Unknown"
+    diplotype: str = "Unknown"
+    variant_rsid: str
+    variant_gene: Optional[str] = None
+    variant_info: Optional[str] = None
 
 
 def predict_risk(drug: str, phenotype: str, confidence: float = 0.8):
@@ -94,12 +106,31 @@ def predict_risk(drug: str, phenotype: str, confidence: float = 0.8):
     }
 
 
-def _fallback_explanation(gene: str, phenotype: str, drug: str):
+def _fallback_explanation(
+    gene: str,
+    phenotype: str,
+    drug: str,
+    variant_rsid: Optional[str] = None,
+    variant_info: Optional[str] = None,
+):
+    variant_suffix = (
+        f" Selected variant {variant_rsid} ({variant_info or 'details unavailable'}) was requested."
+        if variant_rsid
+        else ""
+    )
+
     return {
-        "summary": f"{gene} {phenotype} phenotype may affect {drug} response.",
-        "detailed_explanation": f"The {gene} gene encodes enzymes responsible for metabolizing {drug}. A {phenotype} phenotype indicates altered enzyme activity, which may result in unexpected drug levels or therapeutic effects.",
+        "summary": f"{gene} {phenotype} phenotype may affect {drug} response.{variant_suffix}",
+        "detailed_explanation": f"The {gene} gene encodes enzymes responsible for metabolizing {drug}. A {phenotype} phenotype indicates altered enzyme activity, which may result in unexpected drug levels or therapeutic effects.{variant_suffix}",
         "biological_mechanism": f"{gene} variants affect enzyme function, altering the rate at which {drug} is metabolized in the body.",
-        "variant_explanation": f"{phenotype} phenotype detected, suggesting modified drug metabolism.",
+        "variant_explanation": (
+            f"{phenotype} phenotype detected, suggesting modified drug metabolism."
+            + (
+                f" Variant focus: {variant_rsid} ({variant_info or 'details unavailable'})."
+                if variant_rsid
+                else ""
+            )
+        ),
         "clinical_recommendation": "Consult CPIC guidelines and consider dose adjustment or alternative therapy.",
         "dosage_recommendation": "Healthcare provider evaluation required for dosage adjustment.",
         "warnings": [
@@ -110,24 +141,51 @@ def _fallback_explanation(gene: str, phenotype: str, drug: str):
     }
 
 
+def _empty_explanation():
+    return {
+        "summary": "Select a variant to generate an AI summary.",
+        "detailed_explanation": "Variant-specific explanation will be generated when you click a variant in the results.",
+        "biological_mechanism": "No variant selected yet.",
+        "variant_explanation": "Click a variant from the detected variants list.",
+        "provider": "deferred",
+    }
+
+
 def generate_explanation(
-    gene: str, phenotype: str, drug: str, risk_label: str, diplotype: str = "Unknown"
+    gene: str,
+    phenotype: str,
+    drug: str,
+    risk_label: str,
+    diplotype: str = "Unknown",
+    variant_rsid: Optional[str] = None,
+    variant_info: Optional[str] = None,
 ):
     api_key = os.getenv("OPENAI_API_KEY")
     model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
     if not api_key:
-        explanation = _fallback_explanation(gene, phenotype, drug)
+        explanation = _fallback_explanation(
+            gene, phenotype, drug, variant_rsid, variant_info
+        )
         explanation["reason"] = "OPENAI_API_KEY is missing"
         return explanation
 
     if OpenAI is None:
-        explanation = _fallback_explanation(gene, phenotype, drug)
+        explanation = _fallback_explanation(
+            gene, phenotype, drug, variant_rsid, variant_info
+        )
         explanation["reason"] = "openai package is not installed"
         return explanation
 
     try:
         client = OpenAI(api_key=api_key)
+
+        variant_context = (
+            f"Selected Variant rsID: {variant_rsid}\n"
+            f"Selected Variant details: {variant_info or 'N/A'}\n\n"
+            if variant_rsid
+            else ""
+        )
 
         prompt = (
             "You are a clinical pharmacogenomics assistant. Generate a structured JSON response with exactly 7 fields. "
@@ -137,7 +195,8 @@ def generate_explanation(
             f"Diplotype: {diplotype}\n"
             f"Phenotype: {phenotype}\n"
             f"Risk label: {risk_label}\n\n"
-            "Return ONLY valid JSON in this exact format:\n"
+            + variant_context
+            + "Return ONLY valid JSON in this exact format:\n"
             "{\n"
             '  "summary": "1-2 sentence overview of the pharmacogenomic interaction",\n'
             '  "detailed_explanation": "3-4 sentences explaining the clinical significance",\n'
@@ -158,7 +217,9 @@ def generate_explanation(
         text = (response.choices[0].message.content or "").strip()
 
         if not text:
-            explanation = _fallback_explanation(gene, phenotype, drug)
+            explanation = _fallback_explanation(
+                gene, phenotype, drug, variant_rsid, variant_info
+            )
             explanation["reason"] = "OpenAI returned empty response"
             return explanation
 
@@ -176,7 +237,9 @@ def generate_explanation(
             "warnings",
         ]
         if not all(field in parsed for field in required_fields):
-            explanation = _fallback_explanation(gene, phenotype, drug)
+            explanation = _fallback_explanation(
+                gene, phenotype, drug, variant_rsid, variant_info
+            )
             explanation["reason"] = "OpenAI response missing required fields"
             return explanation
 
@@ -185,11 +248,15 @@ def generate_explanation(
         return parsed
 
     except json.JSONDecodeError as exc:
-        explanation = _fallback_explanation(gene, phenotype, drug)
+        explanation = _fallback_explanation(
+            gene, phenotype, drug, variant_rsid, variant_info
+        )
         explanation["reason"] = f"Failed to parse OpenAI JSON response: {str(exc)}"
         return explanation
     except Exception as exc:
-        explanation = _fallback_explanation(gene, phenotype, drug)
+        explanation = _fallback_explanation(
+            gene, phenotype, drug, variant_rsid, variant_info
+        )
         explanation["reason"] = f"OpenAI call failed: {str(exc)}"
         return explanation
 
@@ -216,7 +283,13 @@ async def analyze_json(payload: AnalyzeRequest):
     variants = []
     for variant in payload.detected_variants:
         variant_gene = (variant.gene or gene).strip().upper()
-        variants.append({"rsid": variant.rsid, "gene": variant_gene})
+        variants.append(
+            {
+                "rsid": variant.rsid,
+                "gene": variant_gene,
+                "variant_info": variant.variant_info,
+            }
+        )
 
     # Use frontend CPIC confidence if provided, otherwise default
     cpic_confidence = payload.confidence if payload.confidence else 0.8
@@ -225,9 +298,12 @@ async def analyze_json(payload: AnalyzeRequest):
     risk = predict_risk(drug, phenotype, cpic_confidence)
 
     # LLM Explanation
-    explanation = generate_explanation(
-        gene, phenotype, drug, risk["risk_label"], diplotype
-    )
+    if payload.include_explanation:
+        explanation = generate_explanation(
+            gene, phenotype, drug, risk["risk_label"], diplotype
+        )
+    else:
+        explanation = _empty_explanation()
 
     # Construct REQUIRED JSON schema
     response = {
@@ -271,3 +347,75 @@ async def analyze_json(payload: AnalyzeRequest):
     }
 
     return response
+
+
+@app.post("/variant-summary")
+async def variant_summary(payload: VariantSummaryRequest):
+    drug = payload.drug.strip().upper() if payload.drug else ""
+    gene = payload.primary_gene.strip().upper() if payload.primary_gene else ""
+    phenotype = payload.phenotype.strip().upper() if payload.phenotype else "Unknown"
+    diplotype = payload.diplotype.strip() if payload.diplotype else "Unknown"
+    variant_gene = (payload.variant_gene or gene).strip().upper()
+
+    if drug not in SUPPORTED_DRUGS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported drug. Supported drugs: {', '.join(sorted(SUPPORTED_DRUGS))}",
+        )
+
+    if variant_gene not in SUPPORTED_GENES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported gene. Supported genes: {', '.join(sorted(SUPPORTED_GENES))}",
+        )
+
+    risk = predict_risk(drug, phenotype, 0.8)
+    explanation = generate_explanation(
+        variant_gene,
+        phenotype,
+        drug,
+        risk["risk_label"],
+        diplotype,
+        payload.variant_rsid,
+        payload.variant_info,
+    )
+
+    variant_diplotype = diplotype
+    if payload.variant_info:
+        variant_diplotype = payload.variant_info.split(" · ")[0].strip() or diplotype
+
+    variant_phenotype = phenotype
+    if variant_gene != gene and phenotype != "Unknown":
+        variant_phenotype = f"{phenotype} (from {gene})"
+
+    return {
+        "variant": {
+            "rsid": payload.variant_rsid,
+            "gene": variant_gene,
+            "variant_info": payload.variant_info,
+        },
+        "pharmacogenomic_profile": {
+            "primary_gene": variant_gene,
+            "diplotype": variant_diplotype,
+            "phenotype": variant_phenotype,
+        },
+        "clinical_recommendation": {
+            "summary": explanation.get(
+                "clinical_recommendation",
+                "Refer to CPIC guidelines before prescribing.",
+            ),
+            "dosage_recommendation": explanation.get(
+                "dosage_recommendation", "Consult healthcare provider."
+            ),
+            "warnings": explanation.get(
+                "warnings", ["Consult healthcare provider before making any changes"]
+            ),
+        },
+        "llm_generated_explanation": {
+            "summary": explanation.get("summary", ""),
+            "detailed_explanation": explanation.get("detailed_explanation", ""),
+            "biological_mechanism": explanation.get("biological_mechanism", ""),
+            "variant_explanation": explanation.get("variant_explanation", ""),
+        },
+        "provider": explanation.get("provider", "fallback"),
+    }

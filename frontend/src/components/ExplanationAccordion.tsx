@@ -3,8 +3,20 @@ import { AnalysisResult } from "@/utils/mockData";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Brain, Sparkles, Dna, FileText } from "lucide-react";
 
-const ExplanationAccordion = ({ data }: { data: AnalysisResult }) => {
-  const e = data.llm_generated_explanation;
+interface ExplanationAccordionProps {
+  data: AnalysisResult;
+  explanation?: AnalysisResult["llm_generated_explanation"];
+  loading?: boolean;
+  selectedVariantRsid?: string | null;
+}
+
+const ExplanationAccordion = ({
+  data,
+  explanation,
+  loading = false,
+  selectedVariantRsid = null,
+}: ExplanationAccordionProps) => {
+  const e = explanation || data.llm_generated_explanation;
 
   const sections = [
     {
@@ -59,7 +71,13 @@ const ExplanationAccordion = ({ data }: { data: AnalysisResult }) => {
           <h3 className="font-display text-lg font-bold text-foreground">
             AI-Generated Explanation
           </h3>
-          <p className="text-xs text-muted-foreground">Powered by advanced language models</p>
+          <p className="text-xs text-muted-foreground">
+            {loading
+              ? "Generating summary for selected variant..."
+              : selectedVariantRsid
+              ? `Summary for ${selectedVariantRsid}`
+              : "Powered by advanced language models"}
+          </p>
         </div>
       </div>
 

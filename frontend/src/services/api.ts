@@ -47,7 +47,8 @@ export async function analyzeRisk(
       detected_variants: pharmaProfile.detected_variants,
       confidence: pharmaProfile.confidence,
       cpic_evidence: pharmaProfile.cpic_evidence,
-      risk_level: pharmaProfile.risk_level
+      risk_level: pharmaProfile.risk_level,
+      include_explanation: false,
     };
 
     console.log("📤 Sending request to:", `${API_BASE}/analyze`);
@@ -154,10 +155,10 @@ export async function analyzeRisk(
         warnings: data.clinical_recommendation?.warnings || ["Consult healthcare provider"],
       },
       llm_generated_explanation: {
-        summary: data.llm_generated_explanation?.summary || "Analysis completed.",
-        detailed_explanation: data.llm_generated_explanation?.detailed_explanation || "Detailed explanation not available.",
-        biological_mechanism: data.llm_generated_explanation?.biological_mechanism || "Biological mechanism not available.",
-        variant_explanation: data.llm_generated_explanation?.variant_explanation || "Variant explanation not available.",
+        summary: data.llm_generated_explanation?.summary || "Select a variant to generate an AI summary.",
+        detailed_explanation: data.llm_generated_explanation?.detailed_explanation || "Variant-specific explanation will be generated after selecting a variant.",
+        biological_mechanism: data.llm_generated_explanation?.biological_mechanism || "No variant selected yet.",
+        variant_explanation: data.llm_generated_explanation?.variant_explanation || "Click a variant from the list to continue.",
       },
       quality_metrics: {
         vcf_parsing_success: data.quality_metrics?.json_parsing_success ?? true,
@@ -189,6 +190,77 @@ export async function analyzeRisk(
     console.error("Unknown error type:", typeof error, error);
     throw new Error("An unexpected error occurred. Please try again or contact support.");
   }
+}
+
+export interface VariantSummaryInput {
+  drug: string;
+  primary_gene: string;
+  diplotype: string;
+  phenotype: string;
+  variant: {
+    rsid: string;
+    gene: string;
+    variant_info?: string;
+  };
+}
+
+export interface VariantSummaryResponse {
+  variant: {
+    rsid: string;
+    gene: string;
+    variant_info?: string;
+  };
+  pharmacogenomic_profile: {
+    primary_gene: string;
+    diplotype: string;
+    phenotype: string;
+  };
+  clinical_recommendation: {
+    summary: string;
+    dosage_recommendation: string;
+    warnings: string[];
+  };
+  llm_generated_explanation: {
+    summary: string;
+    detailed_explanation: string;
+    biological_mechanism: string;
+    variant_explanation: string;
+  };
+  provider?: string;
+}
+
+export async function analyzeVariantSummary(
+  input: VariantSummaryInput
+): Promise<VariantSummaryResponse> {
+  const res = await fetch(`${API_BASE}/variant-summary`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      drug: input.drug,
+      primary_gene: input.primary_gene,
+      diplotype: input.diplotype,
+      phenotype: input.phenotype,
+      variant_rsid: input.variant.rsid,
+      variant_gene: input.variant.gene,
+      variant_info: input.variant.variant_info,
+    }),
+  });
+
+  if (!res.ok) {
+    let message = `Server returned ${res.status}: ${res.statusText}`;
+    try {
+      const errorData = await res.json();
+      message = errorData?.detail || errorData?.message || message;
+    } catch {
+      // ignore JSON parse failure and keep default message
+    }
+    throw new Error(message);
+  }
+
+  const data = await res.json();
+  return data as VariantSummaryResponse;
 }
 
 // Backend health check

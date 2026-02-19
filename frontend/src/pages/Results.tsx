@@ -10,12 +10,17 @@ import ExplanationAccordion from "@/components/ExplanationAccordion";
 import QualityMetrics from "@/components/QualityMetrics";
 import DownloadButtons from "@/components/DownloadButtons";
 import { AnalysisResult } from "@/utils/mockData";
-import { ArrowLeft, Sparkles } from "lucide-react";
+import { ArrowLeft, Loader2, Sparkles } from "lucide-react";
+import { analyzeVariantSummary } from "@/services/api";
 
 const Results = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [selectedVariantKey, setSelectedVariantKey] = useState<string | null>(null);
+  const [selectedVariantRsid, setSelectedVariantRsid] = useState<string | null>(null);
+  const [explanationLoading, setExplanationLoading] = useState(false);
+  const [explanation, setExplanation] = useState<AnalysisResult["llm_generated_explanation"] | undefined>(undefined);
 
   useEffect(() => {
     console.log("🎬 Results page mounted");
@@ -32,12 +37,108 @@ const Results = () => {
     }
   }, [location, navigate]);
 
+  const handleVariantClick = async (
+    variant: AnalysisResult["pharmacogenomic_profile"]["detected_variants"][number],
+    variantKey: string
+  ) => {
+    if (!result) return;
+
+    setSelectedVariantKey(variantKey);
+    setSelectedVariantRsid(variant.rsid);
+    setExplanationLoading(true);
+    setExplanation({
+      summary: `Generating AI summary for ${variant.rsid}...`,
+      detailed_explanation:
+        "Fetching variant-specific clinical interpretation from the backend.",
+      biological_mechanism: `Gene context: ${variant.gene}`,
+      variant_explanation: variant.variant_info
+        ? `Selected variant: ${variant.rsid} (${variant.variant_info})`
+        : `Selected variant: ${variant.rsid}`,
+    });
+
+    try {
+      const llmExplanation = await analyzeVariantSummary({
+        drug: result.drug,
+        primary_gene: result.pharmacogenomic_profile.primary_gene,
+        diplotype: result.pharmacogenomic_profile.diplotype,
+        phenotype: result.pharmacogenomic_profile.phenotype,
+        variant,
+      });
+
+      setResult((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          pharmacogenomic_profile: {
+            ...prev.pharmacogenomic_profile,
+            primary_gene:
+              llmExplanation?.pharmacogenomic_profile?.primary_gene || variant.gene,
+            diplotype:
+              llmExplanation?.pharmacogenomic_profile?.diplotype ||
+              prev.pharmacogenomic_profile.diplotype,
+            phenotype:
+              llmExplanation?.pharmacogenomic_profile?.phenotype ||
+              prev.pharmacogenomic_profile.phenotype,
+          },
+          clinical_recommendation: {
+            summary:
+              llmExplanation?.clinical_recommendation?.summary ||
+              prev.clinical_recommendation.summary,
+            dosage_recommendation:
+              llmExplanation?.clinical_recommendation?.dosage_recommendation ||
+              prev.clinical_recommendation.dosage_recommendation,
+            warnings:
+              llmExplanation?.clinical_recommendation?.warnings?.length
+                ? llmExplanation.clinical_recommendation.warnings
+                : prev.clinical_recommendation.warnings,
+          },
+        };
+      });
+
+      setExplanation({
+        summary:
+          llmExplanation?.llm_generated_explanation?.summary ||
+          `Summary unavailable for ${variant.rsid}.`,
+        detailed_explanation:
+          llmExplanation?.llm_generated_explanation?.detailed_explanation ||
+          `Detailed explanation unavailable for ${variant.rsid}.`,
+        biological_mechanism:
+          llmExplanation?.llm_generated_explanation?.biological_mechanism ||
+          `Biological mechanism unavailable for ${variant.gene}.`,
+        variant_explanation:
+          llmExplanation?.llm_generated_explanation?.variant_explanation ||
+          `Variant explanation unavailable for ${variant.rsid}.`,
+      });
+    } catch (error) {
+      setExplanation({
+        summary: "Unable to generate AI summary for this variant.",
+        detailed_explanation:
+          error instanceof Error ? error.message : "Request failed.",
+        biological_mechanism: "No additional mechanism details available.",
+        variant_explanation: `Variant selected: ${variant.rsid}`,
+      });
+    } finally {
+      setExplanationLoading(false);
+    }
+  };
+
   if (!result) {
     return null;
   }
 
   return (
     <div className="min-h-screen flex flex-col gradient-bg">
+      {explanationLoading && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center">
+          <div className="glass-card rounded-2xl px-6 py-5 flex items-center gap-3 border border-primary/30">
+            <Loader2 className="w-5 h-5 text-primary animate-spin" />
+            <p className="text-sm font-medium text-foreground">
+              Generating variant-specific AI summary...
+            </p>
+          </div>
+        </div>
+      )}
+
       <Navbar />
 
       <main className="flex-1 container mx-auto px-4 py-12">
@@ -115,7 +216,11 @@ const Results = () => {
               transition={{ delay: 0.3 }}
               className="grid grid-cols-1 lg:grid-cols-2 gap-6"
             >
-              <ProfileCard data={result} />
+              <ProfileCard
+                data={result}
+                onVariantClick={handleVariantClick}
+                selectedVariantKey={selectedVariantKey}
+              />
               <RecommendationCard data={result} />
             </motion.div>
 
@@ -125,7 +230,12 @@ const Results = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
             >
-              <ExplanationAccordion data={result} />
+              <ExplanationAccordion
+                data={result}
+                explanation={explanation}
+                loading={explanationLoading}
+                selectedVariantRsid={selectedVariantRsid}
+              />
             </motion.div>
 
 

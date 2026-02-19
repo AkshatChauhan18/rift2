@@ -3,7 +3,16 @@ import { AnalysisResult } from "@/utils/mockData";
 import { Dna, Activity, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
-const ProfileCard = ({ data }: { data: AnalysisResult }) => {
+interface ProfileCardProps {
+  data: AnalysisResult;
+  onVariantClick?: (
+    variant: AnalysisResult["pharmacogenomic_profile"]["detected_variants"][number],
+    variantKey: string
+  ) => void;
+  selectedVariantKey?: string | null;
+}
+
+const ProfileCard = ({ data, onVariantClick, selectedVariantKey }: ProfileCardProps) => {
   const p = data.pharmacogenomic_profile;
 
   return (
@@ -71,14 +80,30 @@ const ProfileCard = ({ data }: { data: AnalysisResult }) => {
           </Badge>
         </p>
 
-        <div className="space-y-2">
-          {p.detected_variants.map((v, idx) => (
+        <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+          {p.detected_variants.map((v, idx) => {
+            const variantKey = `${v.rsid}-${v.gene}-${idx}`;
+
+            return (
             <motion.div
-              key={v.rsid}
+              key={variantKey}
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.4 + idx * 0.1 }}
-              className="p-4 rounded-xl bg-muted/30 border border-border hover:border-primary/30 transition-all group"
+              className={`p-4 rounded-xl bg-muted/30 border transition-all group ${
+                selectedVariantKey === variantKey
+                  ? "border-primary/60 bg-primary/5"
+                  : "border-border hover:border-primary/30"
+              }`}
+              onClick={() => onVariantClick?.(v, variantKey)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onVariantClick?.(v, variantKey);
+                }
+              }}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1">
@@ -101,7 +126,7 @@ const ProfileCard = ({ data }: { data: AnalysisResult }) => {
                 </motion.div>
               </div>
             </motion.div>
-          ))}
+          )})}
         </div>
       </div>
     </motion.div>

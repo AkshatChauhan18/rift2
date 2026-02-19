@@ -14,7 +14,7 @@ export interface AnalysisResult {
     detected_variants: Array<{
       rsid: string;
       gene: string;
-      variant_info: string;
+      variant_info?: string;
     }>;
   };
   clinical_recommendation: {
