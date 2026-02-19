@@ -13,17 +13,11 @@ export async function analyzeRisk(
   drugs: string[]
 ): Promise<AnalysisResult> {
   try {
-    console.log("🔄 Starting analysis...");
-    console.log("📁 File:", file.name, file.size, "bytes");
-    console.log("💊 Drugs:", drugs);
     
-    // Read file content
     const fileContent = await file.text();
-    console.log("📄 File content length:", fileContent.length);
-
-    // Parse VCF file
+    console.log(" File content length:", fileContent.length);
     const variants = parseVcfFile(fileContent);
-    console.log(`🧬 Parsed ${variants.length} variants from VCF`);
+    console.log(`Parsed ${variants.length} variants from VCF`);
     
     if (variants.length === 0) {
       throw new Error("No valid pharmacogenomic variants found in VCF file");
@@ -34,9 +28,9 @@ export async function analyzeRisk(
     
     // Build pharmacogenomic profile
     const pharmaProfile = buildPharmaProfile(variants, drug);
-    console.log("🔬 Pharmacogenomic profile:", pharmaProfile);
-    console.log("📊 CPIC Confidence Score:", pharmaProfile.confidence);
-    console.log("🎯 Risk Level:", pharmaProfile.risk_level);
+    console.log("Pharmacogenomic profile:", pharmaProfile);
+    console.log(" CPIC Confidence Score:", pharmaProfile.confidence);
+    console.log(" Risk Level:", pharmaProfile.risk_level);
 
     // Create JSON payload matching backend schema
     const payload = {
@@ -51,8 +45,8 @@ export async function analyzeRisk(
       include_explanation: false,
     };
 
-    console.log("📤 Sending request to:", `${API_BASE}/analyze`);
-    console.log("📦 Payload:", JSON.stringify(payload, null, 2));
+    console.log("Sending request to:", `${API_BASE}/analyze`);
+    console.log("Payload:", JSON.stringify(payload, null, 2));
 
     // Call backend API with timeout
     const controller = new AbortController();
@@ -69,14 +63,13 @@ export async function analyzeRisk(
 
     clearTimeout(timeoutId);
 
-    console.log("📥 Response status:", res.status, res.statusText);
+    console.log("Response status:", res.status, res.statusText);
 
     if (!res.ok) {
-      // Try to parse error response
       let errorMessage = `Server returned ${res.status}: ${res.statusText}`;
       try {
         const errorData = await res.json();
-        console.error("❌ Error response:", errorData);
+        console.error(" Error response:", errorData);
         
         // Handle different error formats
         if (typeof errorData === 'string') {
@@ -119,9 +112,9 @@ export async function analyzeRisk(
     }
 
     const data = await res.json();
-    console.log("✅ Analysis complete!");
-    console.log("📊 Full Response:", JSON.stringify(data, null, 2));
-    console.log("🔍 Response structure:", {
+
+    console.log("Full Response:", JSON.stringify(data, null, 2));
+    console.log(" Response structure:", {
       patient_id: data.patient_id,
       drug: data.drug,
       risk_label: data.risk_assessment?.risk_label,
@@ -171,7 +164,7 @@ export async function analyzeRisk(
 
     return result;
   } catch (error) {
-    console.error("❌ Analysis failed:", error);
+    console.error("Analysis failed:", error);
     
     // Handle abort/timeout
     if (error instanceof Error && error.name === 'AbortError') {
@@ -327,7 +320,7 @@ function buildVariantRiskAssessment(
   let risk_label: VariantSummaryResponse["risk_assessment"]["risk_label"] =
     "Unknown";
   let severity: VariantSummaryResponse["risk_assessment"]["severity"] = "none";
-  let confidence_score = 0.64;
+  let confidence_score = 0;
 
   if (phenotype === "PM") {
     if (drug === "CLOPIDOGREL") {

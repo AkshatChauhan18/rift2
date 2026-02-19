@@ -394,6 +394,11 @@ async def variant_summary(payload: VariantSummaryRequest):
             "gene": variant_gene,
             "variant_info": payload.variant_info,
         },
+        "risk_assessment": {
+            "risk_label": risk["risk_label"],
+            "confidence_score": risk["confidence"],
+            "severity": risk["severity"],
+        },
         "pharmacogenomic_profile": {
             "primary_gene": variant_gene,
             "diplotype": variant_diplotype,
