@@ -1,0 +1,6 @@
+##fileformat=VCFv4.2
+##source=PharmaGuardTestData_TPMT_PoorMetabolizer
+##INFO=<ID=GENE,Number=1,Type=String,Description="Associated pharmacogenomic gene">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	PATIENT_SAMPLE
+6	18139228	rs1800462	C	G	99	PASS	GENE=TPMT	GT	1/1
+6	18143715	rs1142345	T	C	99	PASS	GENE=TPMT	GT	0/1

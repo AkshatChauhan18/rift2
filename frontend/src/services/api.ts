@@ -1,7 +1,10 @@
 import { AnalysisResult } from "@/utils/mockData";
+import { parseVcfFile, buildPharmaProfile } from "@/utils/vcfParser";
 
 // API Configuration
+// For local development: const API_BASE = "http://127.0.0.1:8000";
 const API_BASE = "https://rift2.onrender.com";
+// const API_BASE = "http://127.0.0.1:8000";
 
 /**
  * Analyze VCF file using the backend API
@@ -19,34 +22,37 @@ export async function analyzeRisk(
     const fileContent = await file.text();
     console.log("📄 File content length:", fileContent.length);
 
-    // Map drug to primary gene
-    const GENE_DRUG_MAP: Record<string, string> = {
-      'CODEINE': 'CYP2D6',
-      'WARFARIN': 'CYP2C9',
-      'CLOPIDOGREL': 'CYP2C19',
-      'SIMVASTATIN': 'SLCO1B1',
-      'AZATHIOPRINE': 'TPMT',
-      'FLUOROURACIL': 'DPYD',
-    };
+    // Parse VCF file
+    const variants = parseVcfFile(fileContent);
+    console.log(`🧬 Parsed ${variants.length} variants from VCF`);
+    
+    if (variants.length === 0) {
+      throw new Error("No valid pharmacogenomic variants found in VCF file");
+    }
 
+    // Analyze first drug (or loop for multiple drugs)
     const drug = drugs[0].toUpperCase();
-    const primaryGene = GENE_DRUG_MAP[drug] || 'CYP2D6';
+    
+    // Build pharmacogenomic profile
+    const pharmaProfile = buildPharmaProfile(variants, drug);
+    console.log("🔬 Pharmacogenomic profile:", pharmaProfile);
+    console.log("📊 CPIC Confidence Score:", pharmaProfile.confidence);
+    console.log("🎯 Risk Level:", pharmaProfile.risk_level);
 
-    // Create JSON payload with all required fields
+    // Create JSON payload matching backend schema
     const payload = {
-      vcf_content: fileContent,
       drug: drug,
-      primary_gene: primaryGene,
-      drugs: drugs
+      primary_gene: pharmaProfile.primary_gene,
+      diplotype: pharmaProfile.diplotype,
+      phenotype: pharmaProfile.phenotype,
+      detected_variants: pharmaProfile.detected_variants,
+      confidence: pharmaProfile.confidence,
+      cpic_evidence: pharmaProfile.cpic_evidence,
+      risk_level: pharmaProfile.risk_level
     };
 
     console.log("📤 Sending request to:", `${API_BASE}/analyze`);
-    console.log("📦 Payload:", { 
-      vcf_length: fileContent.length, 
-      drug,
-      primary_gene: primaryGene,
-      drugs 
-    });
+    console.log("📦 Payload:", JSON.stringify(payload, null, 2));
 
     // Call backend API with timeout
     const controller = new AbortController();
@@ -133,7 +139,7 @@ export async function analyzeRisk(
       drug: data.drug || drugs[0].toUpperCase(),
       timestamp: data.timestamp || new Date().toISOString(),
       risk_assessment: {
-        risk_label: data.risk_assessment?.risk_label || "Unknown",
+        risk_label: data.risk_assessment?.risk_label || "poop",
         confidence_score: data.risk_assessment?.confidence_score || 0.5,
         severity: data.risk_assessment?.severity || "none",
       },
@@ -155,9 +161,9 @@ export async function analyzeRisk(
         variant_explanation: data.llm_generated_explanation?.variant_explanation || "Variant explanation not available.",
       },
       quality_metrics: {
-        vcf_parsing_success: data.quality_metrics?.vcf_parsing_success ?? true,
-        variants_analyzed: data.quality_metrics?.variants_analyzed || 0,
-        gene_coverage: data.quality_metrics?.gene_coverage || 0,
+        vcf_parsing_success: data.quality_metrics?.json_parsing_success ?? true,
+        variants_analyzed: data.pharmacogenomic_profile?.detected_variants?.length || 0,
+        gene_coverage: data.quality_metrics?.gene_coverage || data.quality_metrics?.supported_gene ? 100 : 0,
       },
     };
 

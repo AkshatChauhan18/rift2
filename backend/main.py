@@ -35,6 +35,15 @@ SUPPORTED_DRUGS = {
     "FLUOROURACIL",
 }
 
+# CPIC-based risk severity mapping
+PHENOTYPE_RISK_MAP = {
+    "PM": {"severity": "high", "default_label": "Toxic"},
+    "IM": {"severity": "moderate", "default_label": "Adjust Dosage"},
+    "NM": {"severity": "low", "default_label": "Safe"},
+    "RM": {"severity": "moderate", "default_label": "Monitor"},
+    "URM": {"severity": "moderate", "default_label": "Adjust Dosage"},
+}
+
 
 class VariantInput(BaseModel):
     rsid: str
@@ -47,36 +56,41 @@ class AnalyzeRequest(BaseModel):
     diplotype: str = "Unknown"
     phenotype: str = "Unknown"
     detected_variants: List[VariantInput] = Field(default_factory=list)
+    confidence: Optional[float] = None  # CPIC confidence from frontend
+    cpic_evidence: Optional[str] = None
+    risk_level: Optional[str] = None
 
 
-def predict_risk(drug: str, phenotype: str):
-    drug = drug.strip().upper() if drug else ""
+def predict_risk(drug: str, phenotype: str, confidence: float = 0.8):
+    """
+    Map phenotype to risk assessment using CPIC guidelines.
+    Frontend sends CPIC-calculated confidence; backend maps to clinical risk labels.
+    """
     phenotype = phenotype.strip().upper() if phenotype else "Unknown"
+    drug = drug.strip().upper() if drug else ""
+
+    # Get base risk from phenotype
+    risk_info = PHENOTYPE_RISK_MAP.get(
+        phenotype, {"severity": "none", "default_label": "Unknown"}
+    )
+
+    # Drug-specific risk label overrides
+    risk_label = risk_info["default_label"]
 
     if drug == "CLOPIDOGREL" and phenotype == "PM":
-        return {"risk_label": "Ineffective", "severity": "high", "confidence": 0.92}
+        risk_label = "Ineffective"
+    elif drug in {"AZATHIOPRINE", "FLUOROURACIL"} and phenotype == "PM":
+        risk_label = "Toxic"
+    elif phenotype in {"PM", "IM"}:
+        risk_label = "Adjust Dosage"
+    elif phenotype == "NM":
+        risk_label = "Safe"
 
-    if drug == "CODEINE" and phenotype in {"PM", "URM"}:
-        return {
-            "risk_label": "Adjust Dosage",
-            "severity": "high",
-            "confidence": 0.86,
-        }
-
-    if drug == "WARFARIN" and phenotype in {"PM", "IM"}:
-        return {
-            "risk_label": "Adjust Dosage",
-            "severity": "moderate",
-            "confidence": 0.88,
-        }
-
-    if drug in {"AZATHIOPRINE", "FLUOROURACIL"} and phenotype == "PM":
-        return {"risk_label": "Toxic", "severity": "critical", "confidence": 0.9}
-
-    if phenotype == "NM":
-        return {"risk_label": "Safe", "severity": "low", "confidence": 0.8}
-
-    return {"risk_label": "Unknown", "severity": "none", "confidence": 0.55}
+    return {
+        "risk_label": risk_label,
+        "severity": risk_info["severity"],
+        "confidence": confidence,
+    }
 
 
 def _fallback_explanation(gene: str, phenotype: str, drug: str):
@@ -154,8 +168,11 @@ async def analyze_json(payload: AnalyzeRequest):
         variant_gene = (variant.gene or gene).strip().upper()
         variants.append({"rsid": variant.rsid, "gene": variant_gene})
 
-    # Predict risk
-    risk = predict_risk(drug, phenotype)
+    # Use frontend CPIC confidence if provided, otherwise default
+    cpic_confidence = payload.confidence if payload.confidence else 0.8
+
+    # Predict risk using phenotype and confidence
+    risk = predict_risk(drug, phenotype, cpic_confidence)
 
     # LLM Explanation
     explanation = generate_explanation(gene, phenotype, drug, risk["risk_label"])
@@ -164,7 +181,7 @@ async def analyze_json(payload: AnalyzeRequest):
     response = {
         "patient_id": f"PATIENT_{uuid.uuid4().hex[:6].upper()}",
         "drug": drug,
-        "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "Z",
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "Z",
         "risk_assessment": {
             "risk_label": risk["risk_label"],
             "confidence_score": risk["confidence"],
