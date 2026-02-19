@@ -10,7 +10,21 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-export const supabase = createClient(supabaseUrl || "", supabaseAnonKey || "");
+export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+
+export const supabase = isSupabaseConfigured
+  ? createClient(supabaseUrl as string, supabaseAnonKey as string)
+  : null;
+
+function requireSupabase() {
+  if (!supabase) {
+    throw new Error(
+      "Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel environment variables.",
+    );
+  }
+
+  return supabase;
+}
 
 export interface AnalysisHistoryItem {
   id: string;
@@ -22,7 +36,9 @@ export interface AnalysisHistoryItem {
 }
 
 export async function saveAnalysisResult(userId: string, result: AnalysisResult) {
-  const { error } = await supabase.from("analysis_results").insert({
+  const client = requireSupabase();
+
+  const { error } = await client.from("analysis_results").insert({
     user_id: userId,
     patient_id: result.patient_id,
     drug: result.drug,
@@ -36,7 +52,9 @@ export async function saveAnalysisResult(userId: string, result: AnalysisResult)
 }
 
 export async function getUserAnalysisHistory(userId: string): Promise<AnalysisHistoryItem[]> {
-  const { data, error } = await supabase
+  const client = requireSupabase();
+
+  const { data, error } = await client
     .from("analysis_results")
     .select("id, patient_id, drug, risk_label, created_at, result_data")
     .eq("user_id", userId)
@@ -50,7 +68,9 @@ export async function getUserAnalysisHistory(userId: string): Promise<AnalysisHi
 }
 
 export async function deleteAnalysisHistoryItem(userId: string, itemId: string): Promise<void> {
-  const { error } = await supabase
+  const client = requireSupabase();
+
+  const { error } = await client
     .from("analysis_results")
     .delete()
     .eq("id", itemId)

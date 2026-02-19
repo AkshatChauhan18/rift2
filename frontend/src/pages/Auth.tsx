@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { supabase } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useToast } from "@/components/ui/use-toast";
 
 const Auth = () => {
@@ -22,6 +22,17 @@ const Auth = () => {
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
+
+    if (!isSupabaseConfigured || !supabase) {
+      toast({
+        title: "Supabase not configured",
+        description:
+          "Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in deployment environment variables.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
