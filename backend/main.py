@@ -49,20 +49,9 @@ class AnalyzeRequest(BaseModel):
     detected_variants: List[VariantInput] = Field(default_factory=list)
 
 
-def normalize_drug_name(drug: str) -> str:
-    return (drug or "").strip().upper()
-
-
-def normalize_phenotype(phenotype: str) -> str:
-    return (phenotype or "Unknown").strip().upper()
-
-
-# -----------------------------
-# RISK ENGINE
-# -----------------------------
 def predict_risk(drug: str, phenotype: str):
-    drug = normalize_drug_name(drug)
-    phenotype = normalize_phenotype(phenotype)
+    drug = drug.strip().upper() if drug else ""
+    phenotype = phenotype.strip().upper() if phenotype else "Unknown"
 
     if drug == "CLOPIDOGREL" and phenotype == "PM":
         return {"risk_label": "Ineffective", "severity": "high", "confidence": 0.92}
@@ -90,9 +79,6 @@ def predict_risk(drug: str, phenotype: str):
     return {"risk_label": "Unknown", "severity": "none", "confidence": 0.55}
 
 
-# -----------------------------
-# LLM EXPLANATION (OpenAI)
-# -----------------------------
 def _fallback_explanation(gene: str, phenotype: str, drug: str):
     return {
         "summary": f"{gene} {phenotype} phenotype may affect response to {drug}. "
@@ -144,15 +130,12 @@ def generate_explanation(gene: str, phenotype: str, drug: str, risk_label: str):
         return explanation
 
 
-# -----------------------------
-# MAIN API ENDPOINT
-# -----------------------------
 @app.post("/analyze")
 async def analyze_json(payload: AnalyzeRequest):
-    drug = normalize_drug_name(payload.drug)
+    drug = payload.drug.strip().upper() if payload.drug else ""
     gene = payload.primary_gene.strip().upper()
     diplotype = payload.diplotype.strip() if payload.diplotype else "Unknown"
-    phenotype = normalize_phenotype(payload.phenotype)
+    phenotype = payload.phenotype.strip().upper() if payload.phenotype else "Unknown"
 
     if drug not in SUPPORTED_DRUGS:
         raise HTTPException(
@@ -181,7 +164,7 @@ async def analyze_json(payload: AnalyzeRequest):
     response = {
         "patient_id": f"PATIENT_{uuid.uuid4().hex[:6].upper()}",
         "drug": drug,
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(datetime.timezone.utc).isoformat() + "Z",
         "risk_assessment": {
             "risk_label": risk["risk_label"],
             "confidence_score": risk["confidence"],
