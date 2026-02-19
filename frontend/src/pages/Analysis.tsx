@@ -21,24 +21,13 @@ const Analysis = () => {
 
   const handleAnalyze = async () => {
     if (!file || drugs.length === 0) return;
-    
-    console.log("🎯 handleAnalyze called");
-    console.log("📁 File:", file);
-    console.log("💊 Drugs:", drugs);
-    
     setLoading(true);
     setError(null);
-    
     try {
-      console.log("🚀 Calling analyzeRisk...");
       const data = await analyzeRisk(file, drugs);
-      console.log("✅ Got data from API:", data);
-      console.log("🧭 Navigating to /results with data");
-      
       // Navigate to results page with data
       navigate("/results", { state: { result: data } });
     } catch (e: any) {
-      console.error("❌ Error in handleAnalyze:", e);
       setError(e.message || "An unexpected error occurred. Please try again.");
       setLoading(false);
     }

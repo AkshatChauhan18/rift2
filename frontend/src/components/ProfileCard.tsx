@@ -64,12 +64,12 @@ const ProfileCard = ({ data }: { data: AnalysisResult }) => {
 
       {/* Detected Variants */}
       <div>
-        <div className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+        <p className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
           <span>Detected Variants</span>
           <Badge variant="secondary" className="text-xs">
             {p.detected_variants.length}
           </Badge>
-        </div>
+        </p>
 
         <div className="space-y-2">
           {p.detected_variants.map((v, idx) => (
